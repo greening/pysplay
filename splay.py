@@ -1,28 +1,61 @@
-class Node:
+"""
+This code is based on Danny Sleator's public domain Java splay tree code, ported by Anoop Johnson.
+See http://www.link.cs.cmu.edu/link/ftp-site/splaying/SplayTree.java
+
+Additional enhancements by Dan Greening
+"""
+
+# TODO: Iterator
+# TODO: Implement tree['key'] = value behavior (insert includes key and value)
+
+class DuplicateKeyError(Exception):
+    pass
+
+class _Node(object):
+
     def __init__(self, key):
         self.key = key
         self.left = self.right = None
 
-    def equals(self, node):
-        return self.key == node.key
+    def __eq__(self,other):
+        return isinstance(other, _Node) and self.key == other.key
 
-class SplayTree:
-    def __init__(self):
+
+class SplayTree(object):
+
+    def __init__(self, lessthan=None, equals=None):
+        """:lessthen: is a function defining a strict ordering on keys. If not defined, keys are
+        compared using __lt__
+         "equals: is a function defining equality. If not defined, equality is tested by (not
+        (lessthan(a,b) or lessthan(b,a)).
+
+        Typically you would define these using a lambda."""
+
         self.root = None
-        self.header = Node(None) #For splay()
+        self.header = _Node(None) #For splay()
+        if lessthan:
+            self.lessthan = lessthan
+            if equals:
+                self.equals = equals
+            else:
+                self.equals = lambda a,b: (not self.lessthan(a,b)) and (not self.lessthan(b,a))
+        else:
+            self.lessthan = lambda a,b: a < b
+            if equals:
+                raise ValueError("Cannot define equals without defining lessthan for SplayTree")
+            self.equals = lambda a,b: a == b
 
     def insert(self, key):
         if (self.root == None):
-            self.root = Node(key)
+            self.root = _Node(key)
             return
 
         self.splay(key)
-        if self.root.key == key:
-            # If the key is already there in the tree, don't do anything.
-            return
+        if self.equals(self.root.key, key):
+            raise DuplicateKeyError("Key {} already exists".format(key))
 
-        n = Node(key)
-        if key < self.root.key:
+        n = _Node(key)
+        if self.lessthan(key, self.root.key):
             n.left = self.root.left
             n.right = self.root
             self.root.left = None
@@ -33,12 +66,15 @@ class SplayTree:
         self.root = n
 
     def remove(self, key):
+        if not self.root:
+            raise KeyError('key {} not found in empty SplayTree'.format(key))
+
         self.splay(key)
-        if key != self.root.key:
-            raise 'key not found in tree'
+        if not self.equals(key, self.root.key):
+            raise KeyError('key {} not found in SplayTree'.format(key))
 
         # Now delete the root.
-        if self.root.left== None:
+        if self.root.left == None:
             self.root = self.root.right
         else:
             x = self.root.right
@@ -68,9 +104,9 @@ class SplayTree:
         if self.root == None:
             return None
         self.splay(key)
-        if self.root.key != key:
-            return None
-        return self.root.key
+        if self.equals(self.root.key, key):
+            return self.root.key
+        return None
 
     def isEmpty(self):
         return self.root == None
@@ -80,10 +116,9 @@ class SplayTree:
         t = self.root
         self.header.left = self.header.right = None
         while True:
-            if key < t.key:
-                if t.left == None:
-                    break
-                if key < t.left.key:
+            if self.lessthan(key, t.key):
+                if t.left == None: break
+                if self.lessthan(key, t.left.key):
                     y = t.left
                     t.left = y.right
                     y.right = t
@@ -93,21 +128,19 @@ class SplayTree:
                 r.left = t
                 r = t
                 t = t.left
-            elif key > t.key:
-                if t.right == None:
-                    break
-                if key > t.right.key:
+            elif self.lessthan(t.key, key):
+                if t.right == None: break
+                if self.lessthan(t.right.key, key):
                     y = t.right
                     t.right = y.left
                     y.left = t
                     t = y
-                    if t.right == None:
-                        break
+                    if t.right == None: break
                 l.right = t
                 l = t
                 t = t.right
             else:
-                break
+                break # must be equal!
         l.right = t.left
         r.left = t.right
         t.left = self.header.right
